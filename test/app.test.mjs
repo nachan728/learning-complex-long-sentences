@@ -43,5 +43,23 @@ test('API keys are private, exclusive, encrypted and never fall back to shared e
  assert.equal((await call('/api/key','PUT',{apiKey:key},cb)).status,409);
  assert.equal((await call('/api/key','PUT',{apiKey:key},ca)).status,200);
  await call('/api/key','PUT',{apiKey:'sk-replacement-private-test-key-7890'},ca);assert.equal((await call('/api/key','PUT',{apiKey:key},cb)).status,409);
+ const qwenKey='qwen-account-test-key-not-sk-prefixed';
+ assert.equal((await call('/api/key','PUT',{apiKey:qwenKey,provider:'qwen',model:'test-qwen-model'},ca)).status,200);
+ const config=await(await call('/api/key','GET',null,ca)).json();assert.equal(config.provider,'qwen');assert.equal(config.model,'test-qwen-model');assert.equal(config.baseUrl,'https://dashscope.aliyuncs.com/compatible-mode/v1');
+ let called=false;
+ globalThis.fetch=async(url,opts)=>{if(String(url).includes('dashscope.aliyuncs.com')){called=true;assert.equal(opts.headers.Authorization,`Bearer ${qwenKey}`);assert.equal(opts.redirect,'error');assert.equal(JSON.parse(opts.body).model,'test-qwen-model');return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(demo)}}]}));}return originalFetch(url,opts);};
+ try{assert.equal((await call('/api/generate','POST',{words:demo.vocabulary.map(v=>v.word).join(' ')},ca)).status,200);assert.equal(called,true);}finally{globalThis.fetch=originalFetch;}
+ assert.equal((await call('/api/key','PUT',{apiKey:qwenKey,provider:'openai',model:'test-model'},cb)).status,409);
+ assert.equal((await call('/api/key','PUT',{apiKey:'custom-account-test-key-1234',provider:'custom',model:'test',baseUrl:'http://127.0.0.1'},ca)).status,400);
+ assert.equal((await call('/api/key','PUT',{apiKey:'custom-account-test-key-1234',provider:'custom',model:'test',baseUrl:'https://untrusted.example/v1'},ca)).status,400);
+ assert.equal((await(await call('/api/key','GET',null,ca)).json()).provider,'qwen');
  delete process.env.AI_API_KEY;
+});
+test('provider defaults, custom allowlist and invalid configuration',async()=>{
+ const {normalizeConfig,providers}=await import('../lib/providers.mjs');assert.equal(providers.length,6);
+ assert.throws(()=>normalizeConfig({provider:'unknown'}));assert.throws(()=>normalizeConfig({provider:'qwen',model:''}));
+ process.env.CUSTOM_API_BASE_URLS='https://trusted.example/v1';
+ assert.equal(normalizeConfig({provider:'custom',baseUrl:'https://trusted.example/v1/',model:'my-model'}).baseUrl,'https://trusted.example/v1');
+ assert.throws(()=>normalizeConfig({provider:'custom',baseUrl:'https://trusted.example/v1?key=secret',model:'my-model'}));
+ delete process.env.CUSTOM_API_BASE_URLS;
 });
