@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseWords, systemPrompt, validateLesson } from './lib/lesson.mjs';
+import { credentials } from './lib/credentials.mjs';
 import { validFavorite } from './lib/favorite.mjs';
 const scrypt=promisify(scryptCb), root=path.dirname(fileURLToPath(import.meta.url));
 const dbPath=path.resolve(process.env.DATABASE_PATH||'./data/study.sqlite');
@@ -15,6 +16,7 @@ db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS favorites(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),fingerprint TEXT NOT NULL,payload TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(user_id,fingerprint));`);
+const keys=credentials(db,path.dirname(dbPath));
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const limits=new Map();
 function rate(key,max,windowMs){const now=Date.now();let item=limits.get(key);if(!item||item.until<now){item={n:0,until:now+windowMs};limits.set(key,item);}if(++item.n>max)throw Object.assign(new Error('请求较多，请稍后再试。'),{status:429});}
@@ -23,10 +25,10 @@ function user(req){const token=req.headers.cookie?.match(/(?:^|;\s*)session=([a-
 function required(req){const u=user(req);if(!u)throw Object.assign(new Error('请先登录，收藏将保存在你的账号中。'),{status:401});return u;}
 async function body(req){let bytes=0,chunks=[];for await(const c of req){bytes+=c.length;if(bytes>150000)throw Object.assign(new Error('提交内容过大。'),{status:413});chunks.push(c);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{throw Object.assign(new Error('请求格式错误。'),{status:400});}}
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
-async function generate(words,mode){
- if(!process.env.AI_API_KEY)throw Object.assign(new Error('尚未配置 DeepSeek 密钥。请先体验演示，或在服务端 .env.local 中填写 AI_API_KEY。'),{status:503});
- const response=await fetch(`${(process.env.AI_BASE_URL||'https://api.deepseek.com').replace(/\/$/,'')}/chat/completions`,{method:'POST',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${process.env.AI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.AI_MODEL||'deepseek-flash',messages:[{role:'system',content:systemPrompt},{role:'user',content:JSON.stringify({words,length:mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
- if(!response.ok)throw Object.assign(new Error(response.status===401?'DeepSeek 密钥无效，请检查服务端配置。':response.status===402?'DeepSeek 余额不足，请在开放平台检查。':'DeepSeek 暂时无法完成请求，请稍后重试。'),{status:502});
+async function generate(words,mode,apiKey){
+ if(!apiKey)throw Object.assign(new Error('当前账号尚未绑定密钥，请打开“我的 API”配置自己的 DeepSeek 密钥。'),{status:503});
+ const response=await fetch(`${(process.env.AI_BASE_URL||'https://api.deepseek.com').replace(/\/$/,'')}/chat/completions`,{method:'POST',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.AI_MODEL||'deepseek-flash',messages:[{role:'system',content:systemPrompt},{role:'user',content:JSON.stringify({words,length:mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
+ if(!response.ok)throw Object.assign(new Error(response.status===401?'当前账号的 DeepSeek 密钥无效，请在“我的 API”中更换。':response.status===402?'DeepSeek 余额不足，请在开放平台检查。':'DeepSeek 暂时无法完成请求，请稍后重试。'),{status:502});
  const result=await response.json();let lesson;try{lesson=JSON.parse(result.choices[0].message.content);}catch{throw new Error('模型返回格式错误，请重试。');}return validateLesson(lesson,words,mode);
 }
 export const server=http.createServer(async(req,res)=>{
@@ -40,7 +42,13 @@ export const server=http.createServer(async(req,res)=>{
  if(origin&&origin!==expected) return json(res,403,{error:'来源校验失败。'});
  if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'需要 JSON 请求。'});
  }
- if(p==='/api/me'&&req.method==='GET')return json(res,200,{user:user(req),configured:Boolean(process.env.AI_API_KEY)});
+ if(p==='/api/me'&&req.method==='GET'){const u=user(req);return json(res,200,{user:u,...(u?keys.status(u.id):{configured:false,suffix:null})});}
+ if(p==='/api/key'){
+  const u=required(req);
+  if(req.method==='GET')return json(res,200,keys.status(u.id));
+  if(req.method==='PUT'){rate('key:'+u.id,20,3600000);const b=await body(req);keys.bind(u.id,b.apiKey);return json(res,200,keys.status(u.id));}
+  if(req.method==='DELETE'){keys.remove(u.id);return json(res,200,{configured:false,suffix:null});}
+ }
  if(['/api/register','/api/login'].includes(p)&&req.method==='POST'){
  rate(`auth:${req.socket.remoteAddress}`,15,15*60000);const b=await body(req),email=String(b.email||'').trim().toLowerCase(),password=b.password;
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof password!=='string'||password.length<10||password.length>128)return json(res,400,{error:'请输入有效邮箱，密码长度为 10—128 个字符。'});
@@ -54,7 +62,7 @@ export const server=http.createServer(async(req,res)=>{
  res.setHeader('Set-Cookie',`session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);return json(res,200,{user:{id:u.id,email:u.email}});
  }
  if(p==='/api/logout'&&req.method==='POST'){const token=req.headers.cookie?.match(/(?:^|;\s*)session=([a-f0-9]+)/)?.[1];if(token)db.prepare('DELETE FROM sessions WHERE token=?').run(hash(token));res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');return json(res,200,{ok:true});}
- if(p==='/api/generate'&&req.method==='POST'){const u=required(req);rate(`gen:${u.id}`,8,3600000);const b=await body(req),words=parseWords(b.words);return json(res,200,await generate(words,b.mode==='full'?'full':'daily'));}
+ if(p==='/api/generate'&&req.method==='POST'){const u=required(req);rate(`gen:${u.id}`,8,3600000);const b=await body(req),words=parseWords(b.words);return json(res,200,await generate(words,b.mode==='full'?'full':'daily',keys.get(u.id)));}
  if(p==='/api/favorites'){
  const u=required(req);
  if(req.method==='GET')return json(res,200,{items:db.prepare('SELECT id,payload,note,created FROM favorites WHERE user_id=? ORDER BY id DESC').all(u.id).map(r=>({...r,payload:JSON.parse(r.payload)}))});

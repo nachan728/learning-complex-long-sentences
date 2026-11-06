@@ -24,3 +24,24 @@ test('accounts isolate favorites; duplicate, note, export data, logout',async()=
  await call('/api/logout','POST',{},ca);assert.equal((await call('/api/favorites','GET',null,ca)).status,401);
 });
 test('private APIs and static files',async()=>{assert.equal((await call('/api/generate','POST',{words:'adapt sustain maintain'})).status,401);assert.equal((await call('/.env.local')).status,404);const page=await call('/');assert.equal(page.status,200);assert.match(await page.text(),/句间/);});
+test('API keys are private, exclusive, encrypted and never fall back to shared environment key',async()=>{
+ process.env.AI_API_KEY='sk-this-shared-key-must-never-be-used';
+ const login=async(email,password)=>(await call('/api/login','POST',{email,password})).headers.get('set-cookie').split(';')[0];
+ const ca=await login('a@example.com','test-only-password-a'),cb=await login('b@example.com','test-only-password-b');
+ const key='sk-account-a-private-test-key-123456';
+ assert.equal((await call('/api/key','PUT',{apiKey:key})).status,401);
+ assert.equal((await call('/api/key','PUT',{apiKey:key},ca)).status,200);
+ const state=await(await call('/api/key','GET',null,ca)).json();assert.equal(state.configured,true);assert.equal(state.suffix,'3456');assert.ok(!JSON.stringify(state).includes(key));
+ assert.equal((await(await call('/api/key','GET',null,cb)).json()).configured,false);
+ assert.equal((await call('/api/key','PUT',{apiKey:key},cb)).status,409);
+ const unbound=await call('/api/generate','POST',{words:'adapt sustain maintain'},cb);assert.equal(unbound.status,503);
+ const {DatabaseSync}=await import('node:sqlite');const inspect=new DatabaseSync(process.env.DATABASE_PATH);const saved=inspect.prepare('SELECT encrypted FROM api_credentials WHERE user_id=(SELECT id FROM users WHERE email=?)').get('a@example.com');assert.ok(!saved.encrypted.includes(key));inspect.close();
+ const originalFetch=globalThis.fetch;let actualKey;
+ globalThis.fetch=async(url,opts)=>{if(String(url).includes('api.deepseek.com')){actualKey=opts.headers.Authorization;return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(demo)}}]}),{status:200});}return originalFetch(url,opts);};
+ try{assert.equal((await call('/api/generate','POST',{words:demo.vocabulary.map(v=>v.word).join(' ')},ca)).status,200);assert.equal(actualKey,`Bearer ${key}`);}finally{globalThis.fetch=originalFetch;}
+ await call('/api/key','DELETE',{},ca);assert.equal((await(await call('/api/key','GET',null,ca)).json()).configured,false);
+ assert.equal((await call('/api/key','PUT',{apiKey:key},cb)).status,409);
+ assert.equal((await call('/api/key','PUT',{apiKey:key},ca)).status,200);
+ await call('/api/key','PUT',{apiKey:'sk-replacement-private-test-key-7890'},ca);assert.equal((await call('/api/key','PUT',{apiKey:key},cb)).status,409);
+ delete process.env.AI_API_KEY;
+});

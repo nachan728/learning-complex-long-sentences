@@ -8,11 +8,11 @@
 
 ```powershell
 Copy-Item .env.example .env.local
-# 用编辑器打开 .env.local，填写 AI_API_KEY
+# 用编辑器打开 .env.local，配置端口等选项；密钥在登录后的“我的 API”中填写
 npm start
 ```
 
-打开 http://localhost:3000 。未配置密钥时可使用固定原创演示；注册账号后可生成、收藏和写笔记。API 模型默认 `deepseek-flash`，可通过 `AI_MODEL` 修改。模型配置参考 [DeepSeek 官方文档](https://api-docs.deepseek.com/zh-cn/)。密钥只在后端使用，不会返回客户端。
+打开 http://localhost:3000 。未绑定密钥时可使用固定原创演示；注册登录后在“我的 API”中绑定自己的密钥，之后可生成。收藏与笔记无需密钥。API 模型默认 `deepseek-flash`，可通过 `AI_MODEL` 修改。模型配置参考 [DeepSeek 官方文档](https://api-docs.deepseek.com/zh-cn/)。密钥只在后端使用，不会返回客户端。
 
 ```powershell
 npm test
@@ -26,7 +26,7 @@ npm test
 
 | 变量 | 用途 |
 | --- | --- |
-| AI_API_KEY | DeepSeek 密钥，必填才能生成 |
+| AI_API_KEY | 已停用，不再读取，不会作为任何账号的备用密钥 |
 | AI_BASE_URL | 默认 https://api.deepseek.com |
 | AI_MODEL | 默认 deepseek-flash |
 | DATABASE_PATH | 如 /app/data/study.sqlite，必须位于持久化磁盘 |
@@ -62,3 +62,11 @@ docker run --env-file .env.local -p 3000:3000 -v sentence-data:/app/data sentenc
 账号使用 scrypt 加盐密码摘要、HttpOnly 会话 Cookie、来源检查与基础进程内限流。暂不包含邮件验证、密码重置、管理员后台和多实例部署支持。公网开放注册前应根据实际用户规模增加邮件验证、网关限流和监控。生成配额为每账号每小时 8 次，限流在进程重启后重置。用户会话有效期 30 天。
 
 密钥放入 `.env.local` 或部署环境变量；`.env*`（示例除外）、数据库与测试运行数据均已忽略，不要提交到 GitHub。
+
+## 每账号独立 API 密钥
+
+登录后打开“我的 API”绑定自己的 DeepSeek 密钥。生成只使用当前登录账号的密钥；不接受请求指定其他账号，不回退到环境变量 AI_API_KEY。旧 `.env.local` 中的 AI_API_KEY 不再使用，可以自行删除该行。
+
+密钥以 AES-256-GCM 加密存储，账号 ID 作为附加认证数据；加密主密钥位于被 Git 忽略的 data/credential-encryption.key。备份及迁移需要连同数据库一起保护该文件。服务器管理员仍有解密能力，公网必须使用 HTTPS。客户端仅显示是否绑定与末四位，不在 localStorage、收藏导出或接口响应中保存完整密钥。
+
+数据库通过永久归属记录与唯一约束，保证同一原始密钥在此部署中只能绑定一个账号；停用删除密文，更换不释放旧归属。独立克隆部署不共享数据库，因此不能跨他人独立服务器实施全球唯一绑定，也无法阻止某人将密钥用于其他软件。绑定不调用收费接口，实际有效性在生成时验证。
