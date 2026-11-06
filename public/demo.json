@@ -1,0 +1,26 @@
+{
+  "demo": true,
+  "title": "The Hidden Cost of Greater Efficiency",
+  "paragraphs": [
+    "A company that introduces a new digital tool usually expects its employees to finish familiar tasks more quickly. Yet greater efficiency does not necessarily leave workers with more time. When a task becomes easier, managers may simply ask for more of it. This hypothetical example illustrates why the effects of technological change depend on the decisions that accompany it.",
+    "Although innovation can help a business sustain growth, the consequence that matters most to employees may be a change in how their work is judged. A system designed to measure performance can gradually become a system that determines which activities deserve attention. Workers may then focus on what is easy to count, overlooking responsibilities whose value becomes apparent only over time.",
+    "This does not mean that employers should reject useful technology. Rather, they need to regulate its use in ways that preserve room for human judgment. The question is not simply whether a tool saves time, but whether the time it saves allows people to do better work. By involving employees in that discussion, a company can make technical progress serve a clearer purpose. The benefits may be substantial, but they should never be treated as automatic."
+  ],
+  "translation": [
+    "引入新数字工具的公司通常希望员工更快完成熟悉的任务。然而，效率提高并不一定让员工拥有更多时间。任务变容易后，管理者可能只是要求完成更多任务。这个假设案例说明，技术变革的影响取决于与之相伴的决策。",
+    "虽然创新可以帮助企业维持增长，但对员工而言最重要的后果，可能是工作评价方式的变化。一个用于衡量绩效的系统，可能逐渐变成决定哪些活动值得关注的系统。员工可能因此专注于容易量化的事情，忽略那些价值需要时间才能显现的职责。",
+    "这并不意味着雇主应该拒绝有用的技术。相反，他们需要规范技术的使用，为人的判断保留空间。问题不只是工具能否节约时间，而是节约出的时间能否让人们把工作做得更好。通过让员工参与讨论，公司可以使技术进步服务于更明确的目标。收益或许很大，但绝不能被视为自然而然的结果。"
+  ],
+  "vocabulary": [
+    {"word":"innovation","meaning":"n. 创新；文中指企业引入新技术或方法","collocation":"innovation can help a business sustain growth"},
+    {"word":"efficiency","meaning":"n. 效率","collocation":"greater efficiency"},
+    {"word":"consequence","meaning":"n. 后果；这里特指工作评价方式的变化","collocation":"the consequence that matters most to employees"},
+    {"word":"regulate","meaning":"v. 规范、管理","collocation":"regulate its use"},
+    {"word":"sustain","meaning":"v. 维持、使持续","collocation":"sustain growth"}
+  ],
+  "sentences": [
+    {"text":"Although innovation can help a business sustain growth, the consequence that matters most to employees may be a change in how their work is judged.","translation":"虽然创新可以帮助企业维持增长，但对员工而言最重要的后果，可能是工作评价方式的变化。","skeleton":"The consequence may be a change.","type":"让步状语从句 + 定语从句 + 宾语从句","layers":[{"text":"Although innovation can help a business sustain growth","role":"让步状语从句：承认创新有助于增长。help 后接不带 to 的不定式 sustain。"},{"text":"that matters most to employees","role":"定语从句，修饰 consequence；that 在从句中作主语。"},{"text":"in how their work is judged","role":"介词短语修饰 change；how 引导的宾语从句作介词 in 的宾语。their 指员工的。"}],"logic":"先承认企业层面的益处，再将关注点转向员工面对的评价标准变化，开启第二段的分析。","pitfall":"主句谓语是 may be，不能把定语从句中的 matters 当成主句谓语。"},
+    {"text":"A system designed to measure performance can gradually become a system that determines which activities deserve attention.","translation":"一个用于衡量绩效的系统，可能逐渐变成决定哪些活动值得关注的系统。","skeleton":"A system can become a system.","type":"过去分词后置修饰 + 从句嵌套","layers":[{"text":"designed to measure performance","role":"过去分词短语作后置定语，修饰第一个 system，表示系统被设计用来衡量绩效。"},{"text":"that determines which activities deserve attention","role":"定语从句修饰第二个 system；that 作主语，determines 为从句谓语。"},{"text":"which activities deserve attention","role":"嵌入定语从句的宾语从句，作 determines 的宾语；which 限定 activities，表示哪些活动。"}],"logic":"重复 system 展示同一工具从衡量工作到影响工作取舍的功能变化，是后文风险判断的机制解释。","pitfall":"designed 不是主句谓语；which activities 不是修饰前面 system 的定语从句。"},
+    {"text":"The question is not simply whether a tool saves time, but whether the time it saves allows people to do better work.","translation":"问题不只是工具能否节约时间，而是它节约出的时间能否让人们把工作做得更好。","skeleton":"The question is not simply whether ..., but whether ... .","type":"并列表语从句 + 省略关系词的定语从句","layers":[{"text":"whether a tool saves time","role":"第一个表语从句，与后面的 whether 从句并列。"},{"text":"whether the time it saves allows people to do better work","role":"第二个表语从句；从句主语为 the time，谓语为 allows。"},{"text":"it saves","role":"省略关系词 that 或 which 的定语从句，修饰 time；省略的关系词作 saves 的宾语，it 指工具。"}],"logic":"通过 not simply ... but ... 将标准从节省时间推进到改善工作质量，回应全文中心。","pitfall":"it saves 是 time 的修饰语；不能把 saves 与 allows 当成同一层次的并列谓语。"}
+  ]
+}
