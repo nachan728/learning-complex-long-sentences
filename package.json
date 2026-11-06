@@ -1,1 +1,22 @@
-{"name":"sentence-lab","version":"1.0.0","private":true,"type":"module","engines":{"node":">=24.0.0"},"scripts":{"start":"node --env-file-if-exists=.env.local server.mjs","test":"node --test"}}
+{
+  "name": "sentence-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.local server.mjs",
+    "test": "node --test",
+    "desktop": "electron .",
+    "build:desktop": "node desktop/prepare.mjs && electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "main": "desktop/main.cjs",
+  "description": "考研英语阅读与长难句学习",
+  "author": "Sentence Lab"
+}

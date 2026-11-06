@@ -1,0 +1,11 @@
+import {DatabaseSync,backup} from 'node:sqlite';
+import {existsSync,mkdirSync,copyFileSync} from 'node:fs';
+import path from 'node:path';
+const [source,target]=process.argv.slice(2);
+if(!source||!target)throw new Error('需要源与目标数据目录。');
+if(existsSync(path.join(target,'study.sqlite')))throw new Error('目标已有学习数据库，停止迁移以保留现有数据。');
+mkdirSync(target,{recursive:true});
+const database=new DatabaseSync(path.join(source,'study.sqlite'),{readOnly:true});
+await backup(database,path.join(target,'study.sqlite'));database.close();
+if(existsSync(path.join(source,'credential-encryption.key')))copyFileSync(path.join(source,'credential-encryption.key'),path.join(target,'credential-encryption.key'));
+console.log('学习数据与加密密钥已迁移；未读取或复制 .env.local。');

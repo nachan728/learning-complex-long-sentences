@@ -1,0 +1,15 @@
+{
+ "appId":"com.sentence-lab.study",
+ "productName":"句间",
+ "directories":{"output":"release"},
+ "files":["desktop/main.cjs","package.json"],
+ "extraResources":[
+  {"from":"server.mjs","to":"backend/server.mjs"},
+  {"from":"lib","to":"backend/lib"},
+  {"from":"public","to":"backend/public"},
+  {"from":"desktop/backend.mjs","to":"backend/desktop/backend.mjs"},
+  {"from":"desktop-runtime/node.exe","to":"runtime/node.exe"}
+ ],
+ "win":{"target":[{"target":"nsis","arch":["x64"]}],"signAndEditExecutable":false},
+ "nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true,"perMachine":false,"createDesktopShortcut":true,"createStartMenuShortcut":true,"shortcutName":"句间","deleteAppDataOnUninstall":false,"artifactName":"SentenceLab-Setup-${version}.${ext}"}
+}

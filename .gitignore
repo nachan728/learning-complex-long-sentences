@@ -4,3 +4,5 @@ data/
 node_modules/
 *.log
 test-results/
+release/
+desktop-runtime/
