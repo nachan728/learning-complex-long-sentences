@@ -1,8 +1,10 @@
+import {getBalance} from './lib/balance.mjs';
+import {lookupInput,lookupWord} from './lib/dictionary.mjs';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseWords, systemPrompt, validateLesson } from './lib/lesson.mjs';
@@ -27,8 +29,9 @@ function required(req){const u=user(req);if(!u)throw Object.assign(new Error('�
 async function body(req){let bytes=0,chunks=[];for await(const c of req){bytes+=c.length;if(bytes>150000)throw Object.assign(new Error('提交内容过大。'),{status:413});chunks.push(c);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{throw Object.assign(new Error('请求格式错误。'),{status:400});}}
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 async function generate(words,mode,apiKey,config){
+ if(words.length<3)mode='sentences';
  if(!apiKey)throw Object.assign(new Error('当前账号尚未绑定密钥，请打开“我的 API”配置自己的 模型服务 密钥。'),{status:503});
- const response=await fetch(`${config.baseUrl}/chat/completions`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:config.model,messages:[{role:'system',content:systemPrompt},{role:'user',content:JSON.stringify({words,length:mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
+ const response=await fetch(`${config.baseUrl}/chat/completions`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:config.model,messages:[{role:'system',content:systemPrompt+(mode==='sentences'?' 当前为少量单词复杂句模式，覆盖前述篇章与长度规则：不要写短文，生成3个不同语境、不同句式的独立复杂句，每句20—45词；所有输入词在三句中自然覆盖。paragraphs数组恰好存放这3句，translation逐句对应，sentences恰好3项并按顺序分析每句，text须与对应paragraphs完全一致。logic解释句内逻辑，无需编造段落作用。':'')},{role:'user',content:JSON.stringify({words,length:mode==='sentences'?'3个独立复杂句，每句20—45词':mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
  if(!response.ok)throw Object.assign(new Error(response.status===401?'当前账号的 模型服务 密钥无效，请在“我的 API”中更换。':response.status===402?'模型服务 余额不足，请在开放平台检查。':'模型服务 暂时无法完成请求，请稍后重试。'),{status:502});
  const result=await response.json();let lesson;try{lesson=JSON.parse(result.choices[0].message.content);}catch{throw new Error('模型返回格式错误，请重试。');}return validateLesson(lesson,words,mode);
 }
@@ -43,8 +46,14 @@ export const server=http.createServer(async(req,res)=>{
  if(origin&&origin!==expected) return json(res,403,{error:'来源校验失败。'});
  if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'需要 JSON 请求。'});
  }
+ if(p==='/api/desktop-theme'&&process.env.SENTENCE_DESKTOP==='true'){
+ const preferencePath=path.join(path.dirname(dbPath),'theme.json');
+ if(req.method==='GET'){let theme=null;try{theme=JSON.parse(readFileSync(preferencePath,'utf8')).theme;}catch{}return json(res,200,{theme});}
+ if(req.method==='PUT'){const b=await body(req);if(!['dark','light'].includes(b.theme))return json(res,400,{error:'主题无效'});writeFileSync(preferencePath,JSON.stringify({theme:b.theme}));return json(res,200,{ok:true});}
+ }
  if(p==='/api/me'&&req.method==='GET'){const u=user(req);return json(res,200,{user:u,...(u?keys.status(u.id):{configured:false,suffix:null})});}
  if(p==='/api/providers'&&req.method==='GET')return json(res,200,{providers});
+ if(p==='/api/balance'&&req.method==='GET'){const u=required(req);rate('balance:'+u.id,30,60000);return json(res,200,await getBalance(keys.get(u.id),keys.config(u.id)));}
  if(p==='/api/key'){
   const u=required(req);
   if(req.method==='GET')return json(res,200,keys.status(u.id));
@@ -64,6 +73,7 @@ export const server=http.createServer(async(req,res)=>{
  res.setHeader('Set-Cookie',`session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);return json(res,200,{user:{id:u.id,email:u.email}});
  }
  if(p==='/api/logout'&&req.method==='POST'){const token=req.headers.cookie?.match(/(?:^|;\s*)session=([a-f0-9]+)/)?.[1];if(token)db.prepare('DELETE FROM sessions WHERE token=?').run(hash(token));res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');return json(res,200,{ok:true});}
+ if(p==='/api/dictionary'&&req.method==='POST'){const u=required(req);rate(`dict:${u.id}`,120,3600000);const input=lookupInput(await body(req));const cacheKey=hash(JSON.stringify(input));db.exec('CREATE TABLE IF NOT EXISTS dictionary_cache(user_id INTEGER NOT NULL,cache_key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(user_id,cache_key))');const cached=db.prepare('SELECT payload FROM dictionary_cache WHERE user_id=? AND cache_key=?').get(u.id,cacheKey);if(cached)return json(res,200,JSON.parse(cached.payload));const entry=await lookupWord(input,keys.get(u.id),keys.config(u.id));db.prepare('INSERT OR REPLACE INTO dictionary_cache VALUES(?,?,?)').run(u.id,cacheKey,JSON.stringify(entry));return json(res,200,entry);}
  if(p==='/api/generate'&&req.method==='POST'){const u=required(req);rate(`gen:${u.id}`,8,3600000);const b=await body(req),words=parseWords(b.words);return json(res,200,await generate(words,b.mode==='full'?'full':'daily',keys.get(u.id),keys.config(u.id)));}
  if(p==='/api/favorites'){
  const u=required(req);
@@ -74,7 +84,7 @@ export const server=http.createServer(async(req,res)=>{
  return json(res,404,{error:'接口不存在。'});
  }
  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);return res.end();}
- const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/demo.json':'demo.json','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/icon.svg':'icon.svg'};
+ const files={'/':'index.html','/dictionary.js':'dictionary.js','/theme.js':'theme.js','/theme.css':'theme.css','/daily-quote.js':'daily-quote.js','/balance.js':'balance.js','/account-menu.js':'account-menu.js','/syntax-colors.js':'syntax-colors.js','/app.js':'app.js','/style.css':'style.css','/demo.json':'demo.json','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/icon.svg':'icon.svg'};
  if(!files[p]){res.writeHead(404);return res.end('Not found');}
  const ext=path.extname(files[p]),types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml'};
  res.writeHead(200,{'Content-Type':types[ext],'Cache-Control':p==='/sw.js'?'no-cache':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(path.join(root,'public',files[p])));

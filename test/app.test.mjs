@@ -2,8 +2,13 @@ import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdirSync} from 'node:fs';
 import {parseWords,validateLesson} from '../lib/lesson.mjs';
-test('input normalization and invalid input',()=>{assert.deepEqual(parseWords('Adapt, adapt，sustain\nmaintain'),['adapt','sustain','maintain']);assert.throws(()=>parseWords('ignore <script> this'));assert.throws(()=>parseWords('one two'));});
+test('input normalization and invalid input',()=>{assert.deepEqual(parseWords('Adapt, adapt，sustain\nmaintain'),['adapt','sustain','maintain']);assert.throws(()=>parseWords('ignore <script> this'));assert.deepEqual(parseWords('one two'),['one','two']);assert.deepEqual(parseWords('one one'),['one']);assert.throws(()=>parseWords(''));});
 const demo=JSON.parse(readFileSync(new URL('../public/demo.json',import.meta.url)));
+test('three independent complex sentences use shorter validation and aligned analysis',()=>{
+ const lesson=structuredClone(demo);lesson.paragraphs=lesson.sentences.map(s=>s.text);lesson.translation=lesson.sentences.map(s=>s.translation);lesson.vocabulary=[{word:'innovation',meaning:'创新',collocation:'innovation'}];
+ assert.equal(validateLesson(lesson,['innovation'],'sentences'),lesson);
+ lesson.sentences[0].text=lesson.paragraphs[1];assert.throws(()=>validateLesson(lesson,['innovation'],'sentences'));
+});
 test('lesson coverage and source checks',()=>{const words=demo.vocabulary.map(v=>v.word);assert.equal(validateLesson(demo,words,'daily'),demo);assert.throws(()=>validateLesson(demo,[...words,'uncovered'],'daily'));const changed=structuredClone(demo);changed.sentences[0].text='An invented sentence.';assert.throws(()=>validateLesson(changed,words,'daily'));assert.throws(()=>validateLesson(demo,words,'full'));});
 mkdirSync('test-results',{recursive:true});process.env.DATABASE_PATH=`test-results/test-${process.pid}.sqlite`;
 const {server}=await import('../server.mjs');await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

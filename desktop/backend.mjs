@@ -1,3 +1,4 @@
-import {server} from '../server.mjs';
+process.env.SENTENCE_DESKTOP='true';
+const {server}=await import('../server.mjs');
 server.listen(0,'127.0.0.1',()=>{process.send?.({type:'ready',port:server.address().port});});
 process.on('disconnect',()=>server.close(()=>process.exit(0)));
