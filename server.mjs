@@ -1,3 +1,4 @@
+import {varietyPrompt} from './lib/variety.mjs';
 import {getBalance} from './lib/balance.mjs';
 import {lookupInput,lookupWord} from './lib/dictionary.mjs';
 import http from 'node:http';
@@ -31,7 +32,7 @@ function json(res,status,data){res.writeHead(status,{'Content-Type':'application
 async function generate(words,mode,apiKey,config){
  if(words.length<3)mode='sentences';
  if(!apiKey)throw Object.assign(new Error('当前账号尚未绑定密钥，请打开“我的 API”配置自己的 模型服务 密钥。'),{status:503});
- const response=await fetch(`${config.baseUrl}/chat/completions`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:config.model,messages:[{role:'system',content:systemPrompt+(mode==='sentences'?' 当前为少量单词复杂句模式，覆盖前述篇章与长度规则：不要写短文，生成3个不同语境、不同句式的独立复杂句，每句20—45词；所有输入词在三句中自然覆盖。paragraphs数组恰好存放这3句，translation逐句对应，sentences恰好3项并按顺序分析每句，text须与对应paragraphs完全一致。logic解释句内逻辑，无需编造段落作用。':'')},{role:'user',content:JSON.stringify({words,length:mode==='sentences'?'3个独立复杂句，每句20—45词':mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
+ const response=await fetch(`${config.baseUrl}/chat/completions`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:config.model,messages:[{role:'system',content:systemPrompt+varietyPrompt()+(mode==='sentences'?' 当前为少量单词复杂句模式，覆盖前述篇章与长度规则：不要写短文，生成3个不同语境、不同句式的独立复杂句，每句20—45词；所有输入词在三句中自然覆盖。paragraphs数组恰好存放这3句，translation逐句对应，sentences恰好3项并按顺序分析每句，text须与对应paragraphs完全一致。logic解释句内逻辑，无需编造段落作用。':'')},{role:'user',content:JSON.stringify({words,length:mode==='sentences'?'3个独立复杂句，每句20—45词':mode==='full'?'400—450词':'180—250词'})}],response_format:{type:'json_object'},max_tokens:8000,stream:false})});
  if(!response.ok)throw Object.assign(new Error(response.status===401?'当前账号的 模型服务 密钥无效，请在“我的 API”中更换。':response.status===402?'模型服务 余额不足，请在开放平台检查。':'模型服务 暂时无法完成请求，请稍后重试。'),{status:502});
  const result=await response.json();let lesson;try{lesson=JSON.parse(result.choices[0].message.content);}catch{throw new Error('模型返回格式错误，请重试。');}return validateLesson(lesson,words,mode);
 }
